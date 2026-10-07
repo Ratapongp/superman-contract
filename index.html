@@ -663,21 +663,19 @@ body { font-family: var(--ui-font); background: #111827; color: var(--gray-900);
               <div class="field"><label>วันสิ้นสุดงาน *</label><input type="date" id="f-enddate" oninput="updatePreview()"></div>
             </div>
             <div class="field"><label>สถานที่ปฏิบัติงาน</label><input type="text" id="f-location" placeholder="เช่น กรุงเทพมหานคร" oninput="updatePreview()"></div>
-            <div class="form-section-title" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400);margin:10px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--gray-100)">รายละเอียดการชำระเงิน</div>
-            <div class="field"><label>ธนาคาร</label><input type="text" id="f-bank-name" placeholder="เช่น ธนาคารกสิกรไทย" oninput="updatePreview()"></div>
-            <div class="field-row">
-              <div class="field"><label>เลขที่บัญชี</label><input type="text" id="f-bank-account" placeholder="012-3-45678-9" oninput="updatePreview()"></div>
-              <div class="field"><label>ชื่อบัญชี</label><input type="text" id="f-bank-account-name" placeholder="ชื่อเจ้าของบัญชี" oninput="updatePreview()"></div>
-            </div>
             <div class="form-section-title" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400);margin:10px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--gray-100)">ขอบเขตงาน</div>
             <div class="field"><label>ขอบเขตงาน / Deliverables</label><textarea id="f-scope" placeholder="เช่น ถ่ายทำ 10 ตอน ตอนละ 50 นาที..." oninput="updatePreview()"></textarea></div>
           </div>
 
           <div class="form-section">
             <div class="form-section-title">ค่าตอบแทนและการชำระเงิน</div>
-            <div class="field"><label>ค่าจ้างรวมทั้งสิ้น (บาท) *</label><input type="number" id="f-fee" placeholder="0" oninput="updatePreview()"></div>
+            <div class="field-row" style="margin-bottom:10px">
+              <div class="field"><label>ค่าจ้างรวมทั้งสิ้น (บาท) *</label><input type="number" id="f-fee" placeholder="0" oninput="updatePreview()"></div>
+              <div class="field"><label>ชำระทั้งหมด (งวด)</label><input type="number" id="f-inst-count" min="1" max="12" value="1" oninput="rebuildInstallments()"></div>
+            </div>
+            <div id="installments-wrap"></div>
             <div style="margin-top:6px;padding:8px 10px;background:var(--gray-50);border-radius:6px;border:1px solid var(--gray-200);font-size:12px;color:var(--gray-500)">
-              💳 ชำระโดยเช็คสั่งจ่าย บริษัท ซุปเปอร์แมน จำกัด ภายใน 30 วันทำการนับแต่วันที่ได้รับมอบงานครบถ้วนและได้รับใบแจ้งหนี้ที่ถูกต้อง
+              💳 ชำระเป็นเช็คสั่งจ่ายในนามผู้รับจ้าง
             </div>
           </div>
 
@@ -843,11 +841,11 @@ function getFormData() {
     location:  document.getElementById('f-location').value.trim(),
     scope:     document.getElementById('f-scope').value.trim(),
     fee:             document.getElementById('f-fee').value,
-    bankName:        document.getElementById('f-bank-name').value.trim(),
-    bankAccount:     document.getElementById('f-bank-account').value.trim(),
-    bankAccountName: document.getElementById('f-bank-account-name').value.trim(),
+    bankName:        '',
+    bankAccount:     '',
+    bankAccountName: '',
     notes:           '',
-    installments:    [],
+    installments:    getInstallments(),
   };
 }
 
@@ -870,18 +868,40 @@ function generateContractHTML(d) {
   const fee      = thFee(d.fee);
   const ipScope  = ROLE_IP[d.role] || 'ผลงานทุกประเภทที่เกิดขึ้นจากการปฏิบัติงานในตำแหน่งดังกล่าว';
 
-  /* ── Payment block (เช็ค — ตายตัว) ─── */
-  const paymentSummaryHTML = `<tr><td>การชำระเงิน</td><td>ชำระโดยเช็คสั่งจ่าย บริษัท ซุปเปอร์แมน จำกัด ภายใน 30 วันทำการนับแต่วันที่ได้รับมอบงานครบถ้วน</td></tr>`;
-  const paymentArticleHTML = `ชำระโดยเช็คสั่งจ่าย "บริษัท ซุปเปอร์แมน จำกัด" เป็นจำนวนเงินทั้งสิ้น ${fee} ภายใน 30 (สามสิบ) วันทำการนับแต่วันที่ได้รับมอบงานครบถ้วนและผู้ว่าจ้างได้รับใบแจ้งหนี้ที่ถูกต้อง`;
+  /* ── Payment block ─── */
+  const insts = d.installments || [];
+  const instCount = insts.length;
+  let paymentSummaryHTML = '';
+  let paymentArticleHTML = '';
 
-  /* ── Bank info ─── */
-  const bankInfo = (d.bankName || d.bankAccount || d.bankAccountName)
-    ? `${esc(d.bankName)||'—'} เลขที่ ${esc(d.bankAccount)||'—'} / ชื่อบัญชี ${esc(d.bankAccountName)||'—'}`
-    : '';
-  const bankSummaryRow = bankInfo
-    ? `<tr><td>บัญชีรับชำระ</td><td>${bankInfo}</td></tr>` : '';
-  const bankArticleClause = bankInfo
-    ? `<p class="c-sub"><span class="c-sub-num">4.5</span>&nbsp; ให้ชำระเงินโดยโอนเข้าบัญชี ${bankInfo}</p>` : '';
+  if (instCount === 1 && !insts[0].when && insts[0].amount === 0) {
+    paymentSummaryHTML = `<tr><td>การชำระเงิน</td><td>ชำระเต็มจำนวน ${fee} ภายใน 30 วันนับแต่ได้รับมอบงานครบถ้วน</td></tr>`;
+    paymentArticleHTML = `ชำระเต็มจำนวน ${fee} ภายใน 30 (สามสิบ) วันนับแต่วันที่ได้รับมอบงานครบถ้วนและผู้ว่าจ้างได้รับใบแจ้งหนี้ที่ถูกต้อง`;
+  } else {
+    const instCountWord = thNum(instCount);
+    let instRows = insts.map((inst, i) => {
+      const when = esc(inst.when) || '…………………………………';
+      const amt  = inst.amount > 0 ? parseInt(inst.amount).toLocaleString('th-TH') + ' บาท' : '………… บาท';
+      return `<tr><td>งวดที่ ${i+1}</td><td>${when}</td><td>${amt}</td></tr>`;
+    }).join('');
+    paymentSummaryHTML = `<tr><td style="vertical-align:top">การชำระเงิน</td><td>
+      ชำระ ${instCount} (${instCountWord}) งวด
+      <table class="c-inst-tbl" style="margin-top:.3em">
+        <thead><tr><th>งวดที่</th><th>เมื่อ / เงื่อนไข</th><th style="text-align:right">จำนวนเงิน</th></tr></thead>
+        <tbody>${instRows}</tbody>
+      </table>
+    </td></tr>`;
+    paymentArticleHTML = `แบ่งชำระ ${instCount} (${instCountWord}) งวด ดังนี้` +
+      insts.map((inst, i) => {
+        const when = esc(inst.when) || '…………………………………';
+        const amt  = inst.amount > 0 ? parseInt(inst.amount).toLocaleString('th-TH') + ' บาท' : '………… บาท';
+        return `<br><span style="padding-left:2em">งวดที่ ${i+1}: ${when} เป็นเงิน ${amt}</span>`;
+      }).join('');
+  }
+
+  /* ── Payment method: cheque ─── */
+  const bankSummaryRow = `<tr><td>วิธีการชำระเงิน</td><td>เช็คสั่งจ่ายในนามผู้รับจ้าง</td></tr>`;
+  const bankArticleClause = `<p class="c-sub"><span class="c-sub-num">4.5</span>&nbsp; ผู้ว่าจ้างจะชำระค่าจ้างเป็นเช็คขีดคร่อมสั่งจ่ายในนามผู้รับจ้าง โดยผู้รับจ้างตกลงมารับเช็คด้วยตนเอง ณ สำนักงานของผู้ว่าจ้าง หรือตามวิธีการที่ผู้ว่าจ้างกำหนด และให้ถือว่าการชำระเงินเสร็จสมบูรณ์เมื่อผู้รับจ้างได้รับเช็คและเช็คนั้นสามารถเรียกเก็บเงินได้</p>`;
 
   const scopeRow = d.scope
     ? `<tr><td>ขอบเขตงาน</td><td>${esc(d.scope).replace(/\n/g,'<br>')}</td></tr>` : '';
@@ -1216,7 +1236,7 @@ function updateContractStatus(email, project, status) {
 }
 function clearForm() {
   ['f-project','f-firstname','f-lastname','f-email','f-phone','f-address',
-   'f-startdate','f-enddate','f-location','f-bank-name','f-bank-account','f-bank-account-name',
+   'f-startdate','f-enddate','f-location',
    'f-scope','f-fee'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value='';
   });
