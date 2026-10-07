@@ -675,16 +675,10 @@ body { font-family: var(--ui-font); background: #111827; color: var(--gray-900);
 
           <div class="form-section">
             <div class="form-section-title">ค่าตอบแทนและการชำระเงิน</div>
-            <div class="field-row" style="margin-bottom:10px">
-              <div class="field"><label>ค่าจ้างรวมทั้งสิ้น (บาท) *</label><input type="number" id="f-fee" placeholder="0" oninput="updatePreview()"></div>
-              <div class="field"><label>ชำระทั้งหมด (งวด)</label><input type="number" id="f-inst-count" min="1" max="12" value="1" oninput="rebuildInstallments()"></div>
+            <div class="field"><label>ค่าจ้างรวมทั้งสิ้น (บาท) *</label><input type="number" id="f-fee" placeholder="0" oninput="updatePreview()"></div>
+            <div style="margin-top:6px;padding:8px 10px;background:var(--gray-50);border-radius:6px;border:1px solid var(--gray-200);font-size:12px;color:var(--gray-500)">
+              💳 ชำระโดยเช็คสั่งจ่าย บริษัท ซุปเปอร์แมน จำกัด ภายใน 30 วันทำการนับแต่วันที่ได้รับมอบงานครบถ้วนและได้รับใบแจ้งหนี้ที่ถูกต้อง
             </div>
-            <div id="installments-wrap"></div>
-          </div>
-
-          <div class="form-section">
-            <div class="form-section-title">เงื่อนไขพิเศษ (ถ้ามี)</div>
-            <div class="field"><textarea id="f-notes" placeholder="เช่น ค่าเดินทาง ค่าที่พัก เบี้ยเลี้ยง..." oninput="updatePreview()"></textarea></div>
           </div>
 
           <div class="action-bar">
@@ -852,8 +846,8 @@ function getFormData() {
     bankName:        document.getElementById('f-bank-name').value.trim(),
     bankAccount:     document.getElementById('f-bank-account').value.trim(),
     bankAccountName: document.getElementById('f-bank-account-name').value.trim(),
-    notes:           document.getElementById('f-notes').value.trim(),
-    installments:    getInstallments(),
+    notes:           '',
+    installments:    [],
   };
 }
 
@@ -876,36 +870,9 @@ function generateContractHTML(d) {
   const fee      = thFee(d.fee);
   const ipScope  = ROLE_IP[d.role] || 'ผลงานทุกประเภทที่เกิดขึ้นจากการปฏิบัติงานในตำแหน่งดังกล่าว';
 
-  /* ── Payment block ─── */
-  const insts = d.installments || [];
-  const instCount = insts.length;
-  let paymentSummaryHTML = '';
-  let paymentArticleHTML = '';
-
-  if (instCount === 1 && !insts[0].when && insts[0].amount === 0) {
-    paymentSummaryHTML = `<tr><td>การชำระเงิน</td><td>ชำระเต็มจำนวน ${fee} ภายใน 30 วันนับแต่ได้รับมอบงานครบถ้วน</td></tr>`;
-    paymentArticleHTML = `ชำระเต็มจำนวน ${fee} ภายใน 30 (สามสิบ) วันนับแต่วันที่ได้รับมอบงานครบถ้วนและผู้ว่าจ้างได้รับใบแจ้งหนี้ที่ถูกต้อง`;
-  } else {
-    const instCountWord = thNum(instCount);
-    let instRows = insts.map((inst, i) => {
-      const when = esc(inst.when) || '…………………………………';
-      const amt  = inst.amount > 0 ? parseInt(inst.amount).toLocaleString('th-TH') + ' บาท' : '………… บาท';
-      return `<tr><td>งวดที่ ${i+1}</td><td>${when}</td><td>${amt}</td></tr>`;
-    }).join('');
-    paymentSummaryHTML = `<tr><td style="vertical-align:top">การชำระเงิน</td><td>
-      ชำระ ${instCount} (${instCountWord}) งวด
-      <table class="c-inst-tbl" style="margin-top:.3em">
-        <thead><tr><th>งวดที่</th><th>เมื่อ / เงื่อนไข</th><th style="text-align:right">จำนวนเงิน</th></tr></thead>
-        <tbody>${instRows}</tbody>
-      </table>
-    </td></tr>`;
-    paymentArticleHTML = `แบ่งชำระ ${instCount} (${instCountWord}) งวด ดังนี้` +
-      insts.map((inst, i) => {
-        const when = esc(inst.when) || '…………………………………';
-        const amt  = inst.amount > 0 ? parseInt(inst.amount).toLocaleString('th-TH') + ' บาท' : '………… บาท';
-        return `<br><span style="padding-left:2em">งวดที่ ${i+1}: ${when} เป็นเงิน ${amt}</span>`;
-      }).join('');
-  }
+  /* ── Payment block (เช็ค — ตายตัว) ─── */
+  const paymentSummaryHTML = `<tr><td>การชำระเงิน</td><td>ชำระโดยเช็คสั่งจ่าย บริษัท ซุปเปอร์แมน จำกัด ภายใน 30 วันทำการนับแต่วันที่ได้รับมอบงานครบถ้วน</td></tr>`;
+  const paymentArticleHTML = `ชำระโดยเช็คสั่งจ่าย "บริษัท ซุปเปอร์แมน จำกัด" เป็นจำนวนเงินทั้งสิ้น ${fee} ภายใน 30 (สามสิบ) วันทำการนับแต่วันที่ได้รับมอบงานครบถ้วนและผู้ว่าจ้างได้รับใบแจ้งหนี้ที่ถูกต้อง`;
 
   /* ── Bank info ─── */
   const bankInfo = (d.bankName || d.bankAccount || d.bankAccountName)
@@ -1250,7 +1217,7 @@ function updateContractStatus(email, project, status) {
 function clearForm() {
   ['f-project','f-firstname','f-lastname','f-email','f-phone','f-address',
    'f-startdate','f-enddate','f-location','f-bank-name','f-bank-account','f-bank-account-name',
-   'f-scope','f-fee','f-notes'].forEach(id => {
+   'f-scope','f-fee'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value='';
   });
   document.getElementById('f-role').value = '';
