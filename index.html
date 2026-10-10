@@ -653,6 +653,7 @@ body { font-family: var(--ui-font); background: #111827; color: var(--gray-900);
               <input type="text" id="f-role-custom" placeholder="ระบุตำแหน่งงาน..." oninput="updatePreview()">
             </div>
             </div>
+            <div class="field"><label>เลขประจำตัวประชาชน</label><input type="text" id="f-idcard" inputmode="numeric" maxlength="17" placeholder="X-XXXX-XXXXX-XX-X" oninput="formatIdCard(this)"><div id="idcard-warn" style="display:none;font-size:11px;color:var(--danger);margin-top:3px"></div></div>
             <div class="field"><label>อีเมล *</label><input type="email" id="f-email" placeholder="email@example.com" oninput="updatePreview()"></div>
             <div class="field"><label>เบอร์โทรศัพท์</label><input type="tel" id="f-phone" placeholder="08X-XXX-XXXX" oninput="updatePreview()"></div>
             <div class="field"><label>ที่อยู่</label><input type="text" id="f-address" placeholder="ที่อยู่ตามบัตรประชาชน" oninput="updatePreview()"></div>
@@ -824,6 +825,25 @@ function resetThDates() {
   ['f-startdate','f-enddate'].forEach(id => document.getElementById(id).value = '');
 }
 
+
+/* ── Thai national ID: auto-format + checksum ────────────────────────────── */
+function formatIdCard(el) {
+  const digits = el.value.replace(/\D/g, '').slice(0, 13);
+  const parts = [digits.slice(0,1), digits.slice(1,5), digits.slice(5,10), digits.slice(10,12), digits.slice(12,13)].filter(Boolean);
+  el.value = parts.join('-');
+  const warn = document.getElementById('idcard-warn');
+  let msg = '';
+  if (digits.length > 0 && digits.length < 13) msg = `กรอกแล้ว ${digits.length}/13 หลัก`;
+  else if (digits.length === 13 && !validThaiId(digits)) msg = 'เลขบัตรไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง';
+  warn.textContent = msg; warn.style.display = msg ? 'block' : 'none';
+  updatePreview();
+}
+function validThaiId(d) {
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += +d[i] * (13 - i);
+  return (11 - sum % 11) % 10 === +d[12];
+}
+
 /* ── Dynamic Installments ────────────────────────────────────────────────── */
 function rebuildInstallments() {
   const count = Math.max(1, Math.min(12, parseInt(document.getElementById('f-inst-count').value)||1));
@@ -871,6 +891,7 @@ function getFormData() {
     role: document.getElementById('f-role').value === '__other__'
             ? (document.getElementById('f-role-custom').value.trim() || 'อื่นๆ')
             : document.getElementById('f-role').value,
+    idcard:    document.getElementById('f-idcard').value.trim(),
     email:     document.getElementById('f-email').value.trim(),
     phone:     document.getElementById('f-phone').value.trim(),
     address:   document.getElementById('f-address').value.trim(),
@@ -985,6 +1006,7 @@ function generateContractHTML(d) {
         <td>
           <div class="party-name">${esc(fullname)}</div>
           <div class="party-row"><span class="party-label">ตำแหน่ง</span><span>${esc(role)}</span></div>
+          <div class="party-row"><span class="party-label">เลขประจำตัวประชาชน</span><span>${esc(d.idcard) || '………………………………'}</span></div>
           <div class="party-row"><span class="party-label">ที่อยู่</span><span>${esc(d.address) || '…………………………………………………'}</span></div>
           <div class="party-row"><span class="party-label">โทรศัพท์</span><span>${esc(d.phone) || '……………………'}</span></div>
           <div class="party-row"><span class="party-label">อีเมล</span><span>${esc(d.email) || '……………………'}</span></div>
@@ -1273,7 +1295,7 @@ function updateContractStatus(email, project, status) {
 }
 function clearForm() {
   ['f-project','f-firstname','f-lastname','f-email','f-phone','f-address',
-   'f-startdate','f-enddate','f-location',
+   'f-startdate','f-enddate','f-location','f-idcard',
    'f-scope','f-fee'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value='';
   });
@@ -1283,6 +1305,7 @@ function clearForm() {
   document.getElementById('f-company').value = 'บริษัท ซุปเปอร์แมน จำกัด';
   document.getElementById('f-inst-count').value = '1';
   resetThDates();
+  document.getElementById('idcard-warn').style.display = 'none';
   rebuildInstallments(); updatePreview();
 }
 
