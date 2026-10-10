@@ -112,6 +112,8 @@ body { font-family: var(--ui-font); background: #111827; color: var(--gray-900);
 .field textarea { resize: vertical; min-height: 56px; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .field-row .field { margin-bottom: 0; }
+.th-date { display: grid; grid-template-columns: 58px 1fr 76px; gap: 4px; }
+.th-date select { padding: 7px 4px !important; }
 
 .installment-header { display: grid; grid-template-columns: 52px 1fr 130px; gap: 6px; margin-bottom: 4px; }
 .installment-header span { font-size: 10px; font-weight: 600; color: var(--gray-500); }
@@ -659,8 +661,8 @@ body { font-family: var(--ui-font); background: #111827; color: var(--gray-900);
           <div class="form-section">
             <div class="form-section-title">รายละเอียดงาน</div>
             <div class="field-row">
-              <div class="field"><label>วันเริ่มงาน *</label><input type="date" id="f-startdate" oninput="updatePreview()"></div>
-              <div class="field"><label>วันสิ้นสุดงาน *</label><input type="date" id="f-enddate" oninput="updatePreview()"></div>
+              <div class="field"><label>วันเริ่มงาน *</label><div class="th-date" data-target="f-startdate"></div><input type="hidden" id="f-startdate"></div>
+              <div class="field"><label>วันสิ้นสุดงาน *</label><div class="th-date" data-target="f-enddate"></div><input type="hidden" id="f-enddate"></div>
             </div>
             <div class="field"><label>สถานที่ปฏิบัติงาน</label><input type="text" id="f-location" placeholder="เช่น กรุงเทพมหานคร" oninput="updatePreview()"></div>
             <div class="form-section-title" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400);margin:10px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--gray-100)">ขอบเขตงาน</div>
@@ -784,6 +786,42 @@ function showListPasswordModal() {
   input.value = '';
   document.getElementById('pw-modal-error').textContent = '';
   setTimeout(() => input.focus(), 50);
+}
+
+
+/* ── Thai Buddhist-year date pickers (พ.ศ. only) ─────────────────────────── */
+const TH_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+function buildThDatePickers() {
+  const nowBE = new Date().getFullYear() + 543;
+  document.querySelectorAll('.th-date').forEach(w => {
+    let d = '<option value="">วัน</option>';
+    for (let i = 1; i <= 31; i++) d += `<option value="${i}">${i}</option>`;
+    let m = '<option value="">เดือน</option>';
+    TH_MONTHS.forEach((name, i) => m += `<option value="${i+1}">${name}</option>`);
+    let y = '<option value="">พ.ศ.</option>';
+    for (let i = nowBE - 1; i <= nowBE + 3; i++) y += `<option value="${i}">${i}</option>`;
+    w.innerHTML = `<select class="thd-d">${d}</select><select class="thd-m">${m}</select><select class="thd-y">${y}</select>`;
+    w.querySelectorAll('select').forEach(s => s.addEventListener('change', () => syncThDate(w)));
+  });
+}
+function syncThDate(w) {
+  const hidden = document.getElementById(w.dataset.target);
+  const dSel = w.querySelector('.thd-d'), mSel = w.querySelector('.thd-m'), ySel = w.querySelector('.thd-y');
+  const m = +mSel.value, yBE = +ySel.value;
+  if (m && yBE) {                       // clamp day to days in that month (e.g. 31 ก.พ. -> 28/29)
+    const maxDay = new Date(yBE - 543, m, 0).getDate();
+    if (+dSel.value > maxDay) dSel.value = String(maxDay);
+  }
+  const d = +dSel.value;
+  hidden.value = (d && m && yBE)
+    ? `${yBE - 543}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}` : '';
+  const s = document.getElementById('f-startdate').value, e = document.getElementById('f-enddate').value;
+  if (s && e && e < s) toast('วันสิ้นสุดงานต้องไม่ก่อนวันเริ่มงาน', 'error');
+  updatePreview();
+}
+function resetThDates() {
+  document.querySelectorAll('.th-date select').forEach(s => s.value = '');
+  ['f-startdate','f-enddate'].forEach(id => document.getElementById(id).value = '');
 }
 
 /* ── Dynamic Installments ────────────────────────────────────────────────── */
@@ -997,9 +1035,8 @@ function generateContractHTML(d) {
   <p class="c-sub"><span class="c-sub-num">3.1</span>&nbsp; ผู้รับจ้างรับรองว่าจะปฏิบัติงานด้วยความรู้ความสามารถ ประสบการณ์ และมาตรฐานวิชาชีพสูงสุด ปฏิบัติตามกฎหมายที่เกี่ยวข้องทุกประการ และยึดหลักจรรยาบรรณในทุกขั้นตอน</p>
   <p class="c-sub"><span class="c-sub-num">3.2</span>&nbsp; ผู้รับจ้างรับรองว่าเนื้อหาและผลงานจะต้องไม่พาดพิงหรือสร้างความเสื่อมเสียแก่บุคคลใด ไม่เป็นการก้าวล่วงต่อสถาบันพระมหากษัตริย์ไทย และไม่ขัดต่อกฎหมายหรือความสงบเรียบร้อยและศีลธรรมอันดีของประชาชน</p>
   <p class="c-sub"><span class="c-sub-num">3.3</span>&nbsp; ผู้รับจ้างรับรองว่าตลอดอายุสัญญานี้ ผู้รับจ้างไม่มีข้อผูกพันใดๆ กับบุคคลภายนอกอันเป็นการขัดขวางการปฏิบัติตามสัญญานี้</p>
-  <p class="c-sub"><span class="c-sub-num">3.4</span>&nbsp; ผู้รับจ้างตกลงจะไม่ปฏิบัติงานในตำแหน่งเดียวกันหรือคล้ายคลึงให้แก่โปรเจกต์อื่นที่เป็นคู่แข่งในระหว่างอายุสัญญา เว้นแต่จะได้รับความยินยอมเป็นลายลักษณ์อักษรจากผู้ว่าจ้าง</p>
-  <p class="c-sub"><span class="c-sub-num">3.5</span>&nbsp; ในกรณีที่ผู้ว่าจ้างร้องขอ ผู้รับจ้างต้องให้ความร่วมมือในการเข้าร่วมกิจกรรมประชาสัมพันธ์ แถลงข่าว (Press Conference) และกิจกรรมส่งเสริมการตลาดของโปรเจกต์ตามที่ผู้ว่าจ้างกำหนด</p>
-  <p class="c-sub"><span class="c-sub-num">3.6</span>&nbsp; ตลอดระยะเวลาสัญญานี้ และภายในระยะเวลา 1 (หนึ่ง) ปีนับจากวันสิ้นสุดสัญญา ผู้รับจ้างตกลงจะไม่กระทำการใดๆ อันมีลักษณะส่งผลกระทบในด้านลบต่อภาพลักษณ์ของผู้ว่าจ้างหรือโปรเจกต์ ไม่ว่าโดยการให้สัมภาษณ์สื่อมวลชน การโพสต์ข้อความ รูปภาพ หรือเสียงบนสื่อสังคมออนไลน์หรือช่องทางใดๆ ก็ตาม</p>
+  <p class="c-sub"><span class="c-sub-num">3.4</span>&nbsp; ในกรณีที่ผู้ว่าจ้างร้องขอ ผู้รับจ้างตกลงให้ความร่วมมือเข้าร่วมกิจกรรมประชาสัมพันธ์ของโปรเจกต์ รวมทั้งสิ้นไม่เกิน 3 (สาม) ครั้ง ได้แก่ พิธีบวงสรวง 1 (หนึ่ง) ครั้ง และงานแถลงข่าว (Press Conference) 2 (สอง) ครั้ง ตามวันและเวลาที่ผู้ว่าจ้างกำหนด โดยผู้ว่าจ้างจะแจ้งให้ผู้รับจ้างทราบล่วงหน้าตามสมควร</p>
+  <p class="c-sub"><span class="c-sub-num">3.5</span>&nbsp; ตลอดระยะเวลาสัญญานี้ และภายในระยะเวลา 1 (หนึ่ง) ปีนับจากวันสิ้นสุดสัญญา ผู้รับจ้างตกลงจะไม่กระทำการใดๆ อันมีลักษณะส่งผลกระทบในด้านลบต่อภาพลักษณ์ของผู้ว่าจ้างหรือโปรเจกต์ ไม่ว่าโดยการให้สัมภาษณ์สื่อมวลชน การโพสต์ข้อความ รูปภาพ หรือเสียงบนสื่อสังคมออนไลน์หรือช่องทางใดๆ ก็ตาม</p>
 </div>
 
 <div class="c-article">
@@ -1245,6 +1282,7 @@ function clearForm() {
   document.getElementById('role-custom-wrap').style.display = 'none';
   document.getElementById('f-company').value = 'บริษัท ซุปเปอร์แมน จำกัด';
   document.getElementById('f-inst-count').value = '1';
+  resetThDates();
   rebuildInstallments(); updatePreview();
 }
 
@@ -1419,6 +1457,7 @@ document.getElementById('f-role').addEventListener('change', function() {
 });
 
 /* ── Init ────────────────────────────────────────────────────────────────── */
+buildThDatePickers();
 rebuildInstallments();
 
 /* ── Standalone mode (outside Cowork) ───────────────────────────────────── */
